@@ -10,7 +10,8 @@ backup() { [ -e "$1" ] && cp -r "$1" "$1.bak-gdd" && say "backed up $1 -> $1.bak
 
 say "Installing scripts to ~/.local/bin"
 mkdir -p ~/.local/bin
-install -m 755 bin/vinylctl bin/starwars-scene bin/panel-fastfetch.sh bin/workdeck bin/labfeed ~/.local/bin/
+install -m 755 bin/vinylctl bin/starwars-scene bin/panel-fastfetch.sh bin/workdeck bin/labfeed \
+    bin/bionews bin/biopaper ~/.local/bin/
 
 say "Installing PipeWire equalizer sink (vinylctl EQ)"
 mkdir -p ~/.config/pipewire/pipewire.conf.d
@@ -35,6 +36,18 @@ else
     cp config/kitty/kitty.conf ~/.config/kitty/kitty.conf.gdd-example
     say "kept your kitty.conf; example saved as kitty.conf.gdd-example"
 fi
+
+say "Installing Lab biology feeds (newsboat) + calcurse agenda"
+mkdir -p ~/.config/newsboat-lab ~/.local/share/newsboat-lab
+cp config/newsboat-lab/config ~/.config/newsboat-lab/
+if [ ! -e ~/.config/newsboat-lab/urls ]; then
+    cp config/newsboat-lab/urls ~/.config/newsboat-lab/urls
+else
+    cp config/newsboat-lab/urls ~/.config/newsboat-lab/urls.gdd-example
+    say "kept your Lab feed list; example saved as urls.gdd-example"
+fi
+mkdir -p ~/.config/calcurse
+[ -e ~/.config/calcurse/conf ] || cp config/calcurse/conf ~/.config/calcurse/
 
 say "Installing fastfetch / cava / btop configs"
 backup ~/.config/fastfetch; mkdir -p ~/.config/fastfetch/assets
@@ -118,7 +131,8 @@ kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 1.2
 qdbus org.kde.KWin /KWin reconfigure 2>/dev/null || true
 
 say "Done. Remaining manual steps (see docs/TUTORIAL.md):"
-echo "  1. Install packages:  sudo dnf install kitty btop cava fastfetch playerctl quickshell inotify-tools"
+echo "  1. Install packages:  sudo dnf install kitty btop cava fastfetch playerctl quickshell \\"
+echo "                                        inotify-tools newsboat calcurse cbonsai"
 echo "  2. Install unimatrix: pipx install git+https://github.com/will8211/unimatrix"
 echo "  3. Optional dock:     sudo dnf copr enable isac322/krema && sudo dnf install krema"
 echo "  4. Optional player backend extras: sudo dnf install mpd mpc yt-dlp  (for rmpc)"

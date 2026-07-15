@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=widget-bionews
+Exec=kitty -1 --instance-group gddwidgets --class bionews-widget --config __HOME__/.config/kitty/panels/bionews.conf __HOME__/.local/bin/bionews
+X-KDE-autostart-after=panel
+NoDisplay=true

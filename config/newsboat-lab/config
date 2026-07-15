@@ -1,0 +1,32 @@
+# bionews — newsboat config for the Lab desktop (graphite-amber)
+auto-reload yes
+reload-time 30
+refresh-on-startup yes
+reload-threads 6
+show-read-feeds yes
+show-read-articles yes
+feed-sort-order lastupdated
+article-sort-order date-desc
+show-keymap-hint no
+show-title-bar no
+scrolloff 3
+datetime-format "%b %d"
+text-width 100
+browser "xdg-open %u"
+
+feedlist-format    " %t %> %u "
+articlelist-format " %D  %t %> %L "
+
+color background         default  default
+color listnormal         color137 default
+color listfocus          color230 color237
+color listnormal_unread  color214 default
+color listfocus_unread   color230 color237 bold
+color info               color214 color233
+color article            color223 default
+color title              color214 color233 bold
+color hint-key           color214 color233
+color hint-separator     color137 color233
+color hint-description   color137 color233
+
+highlight article "^(Title|Feed|Date|Author|Link):.*" color214 default bold

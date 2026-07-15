@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""biopaper — rotating bioRxiv preprint abstracts for the Lab desktop (graphite-amber).
+
+Refetches every 15 min, rotates to the next preprint every 25 s.
+Keys: j/space next, k previous, r refetch, q quit.
+"""
+import html
+import os
+import re
+import select
+import signal
+import sys
+import termios
+import textwrap
+import time
+import tty
+import urllib.request
+import xml.etree.ElementTree as ET
+
+DIM = "\x1b[38;2;168;124;58m"
+MID = "\x1b[38;2;216;156;74m"
+BRIGHT = "\x1b[38;2;255;232;192m"
+WHITE = "\x1b[38;2;245;240;232m"
+RESET = "\x1b[0m"
+
+FEED = "http://connect.biorxiv.org/biorxiv_xml.php?subject=all"
+REFETCH = 900
+ROTATE = 25
+def clean(s):
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", s or ""))).strip()
+
+
+def tag(el):
+    """Local name of an element, ignoring any XML namespace."""
+    return el.tag.rsplit("}", 1)[-1]
+
+
+def child(el, name):
+    """First child with the given local name; bioRxiv serves RSS 1.0 (RDF),
+    so every element is namespaced and plain find() misses them."""
+    return next((clean(c.text) for c in el if tag(c) == name), "")
+
+
+def fetch():
+    req = urllib.request.Request(FEED, headers={"User-Agent": "biopaper/1.0"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        root = ET.fromstring(r.read())
+    out = []
+    for it in root.iter():
+        if tag(it) != "item":
+            continue
+        out.append({
+            "title": child(it, "title"),
+            "authors": child(it, "creator"),
+            "date": child(it, "date")[:10],
+            "abstract": child(it, "description"),
+        })
+    return out
+
+
+def draw(papers, idx, w, h, err):
+    out = ["\x1b[H\x1b[2J"]
+    out.append(f"{MID}╭── LAB ── bioRxiv preprints {'─' * max(0, w - 32)}╮{RESET}")
+    if err:
+        out.append(f"\n  {DIM}offline — {err}{RESET}")
+    elif not papers:
+        out.append(f"\n  {DIM}fetching…{RESET}")
+    else:
+        p = papers[idx % len(papers)]
+        body = w - 4
+        out.append("")
+        for i, line in enumerate(textwrap.wrap(p["title"], body)[:3]):
+            out.append(f"  {BRIGHT}{line}{RESET}")
+        out.append(f"  {DIM}{p['date']}  ·  {p['authors'][:body - 16]}{RESET}")
+        out.append("")
+        used = len(out) + 2
+        for line in textwrap.wrap(p["abstract"], body)[: max(0, h - used - 1)]:
+            out.append(f"  {WHITE}{line}{RESET}")
+    sys.stdout.write("\n".join(out))
+    sys.stdout.write(f"\x1b[{h};1H{DIM} {idx % max(1, len(papers)) + 1}/{len(papers)}"
+                     f"  ·  j next · k prev · r reload{RESET}")
+    sys.stdout.flush()
+
+
+def main():
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
+    sys.stdout.write("\x1b[?25l\x1b[?1049h")
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    papers, idx, err = [], 0, None
+    last_fetch, last_rot = 0.0, time.monotonic()
+    try:
+        while True:
+            now = time.monotonic()
+            if now - last_fetch > REFETCH:
+                try:
+                    papers, err = fetch(), None
+                except Exception as e:
+                    err = str(e)[:60]
+                last_fetch = now
+            if papers and now - last_rot > ROTATE:
+                idx, last_rot = idx + 1, now
+            size = os.get_terminal_size()
+            draw(papers, idx, size.columns, size.lines, err)
+            r, _, _ = select.select([fd], [], [], 1.0)
+            if r:
+                k = os.read(fd, 8).decode(errors="ignore")
+                if k == "q":
+                    break
+                if k in ("j", " ", "\x1b[B"):
+                    idx, last_rot = idx + 1, time.monotonic()
+                elif k in ("k", "\x1b[A"):
+                    idx, last_rot = idx - 1, time.monotonic()
+                elif k == "r":
+                    last_fetch = 0
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write("\x1b[?1049l\x1b[?25h" + RESET)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=widget-funcava
+Exec=kitty -1 --instance-group gddwidgets --class funcava-widget --config __HOME__/.config/kitty/panels/funcava.conf cava
+X-KDE-autostart-after=panel
+NoDisplay=true

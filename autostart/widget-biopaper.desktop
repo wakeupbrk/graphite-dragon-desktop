@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=widget-biopaper
+Exec=kitty -1 --instance-group gddwidgets --class biopaper-widget --config __HOME__/.config/kitty/panels/biopaper.conf __HOME__/.local/bin/biopaper
+X-KDE-autostart-after=panel
+NoDisplay=true

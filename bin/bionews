@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# bionews — biology news reader for the Lab desktop (newsboat wrapper).
+mkdir -p ~/.local/share/newsboat-lab
+exec newsboat \
+    -C ~/.config/newsboat-lab/config \
+    -u ~/.config/newsboat-lab/urls \
+    -c ~/.local/share/newsboat-lab/cache.db

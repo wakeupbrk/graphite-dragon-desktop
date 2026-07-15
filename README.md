@@ -25,6 +25,9 @@ Everything is pinned into place by forced KWin window rules — panels never mov
 ### 🧊 quickshell top bar — Hyprland rice, KWin blood
 [ilyamiro's](https://github.com/ilyamiro/nixos-configuration) gorgeous QuickShell bar, ported off Hyprland: workspaces, MPRIS controls, tray, weather, network/battery — all driven by KWin D-Bus instead of hyprctl/sockets. Four named desktops (Main/Work/Fun/Lab) each recolor the whole bar live: ice, mint, violet, amber. Upstream ships no license, so `install.sh` clones it and applies our patch (`topbar/kwin-port.patch`) rather than vendoring the code.
 
+### 🧬 four desktops, four dashboards
+Main keeps the six-panel dashboard; Work, Fun and Lab are each filled to the same density on a two-column grid of forced-geometry widgets. **Work**: `workdeck` (pomodoro + todo) beside a full-height [calcurse](https://github.com/lfos/calcurse) agenda. **Fun**: a full-height cava visualizer, vinylctl, and a [cbonsai](https://github.com/jallbrit/cbonsai) growing underneath. **Lab** is wired for biology — `bionews` reads bioRxiv, Nature, Science, PLOS Biology, Cell, ScienceDaily and Quanta through a private [newsboat](https://github.com/newsboat/newsboat) profile, while `biopaper` rotates the newest bioRxiv preprint abstracts. Eight widget windows share a single kitty process (~118 MB) — see [§11](docs/TUTORIAL.md).
+
 ### 🎵 vinylctl — the media deck
 ![Media corner](screenshots/media-corner.png)
 

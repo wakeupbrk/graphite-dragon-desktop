@@ -155,15 +155,21 @@ Gotchas we hit:
 
 ## 11. Per-desktop widgets (Work / Fun / Lab)
 
-The six dashboard panels live on desktop 1 (Main) only — the other desktops each get one purpose widget instead, pinned by KWin rules (`desktops=` + force) into btop's slot:
+Main runs the six dashboard panels. Every other desktop is filled out to the same density with its own widgets, pinned by KWin rules (`desktops=` + force) onto a two-column grid — a tall 909px column on the left, an 849px column on the right:
 
-| desktop | widget | what |
+| desktop | left column | right column |
 |---|---|---|
-| 2 Work | `bin/workdeck` | pomodoro + persistent todo (mint) |
-| 3 Fun | `bin/vinylctl` (2nd instance) | full-size media deck; media apps also auto-route here |
-| 4 Lab | `bin/labfeed` | live colorized system journal (amber) |
+| 2 Work | `bin/workdeck` — pomodoro + persistent todo (mint) | `calcurse` — calendar & agenda, full height |
+| 3 Fun | `cava` (2nd instance) — full-height visualizer | `bin/vinylctl` media deck, `cbonsai` growing below it |
+| 4 Lab | `bin/bionews` — biology news reader (amber) | `bin/biopaper` preprint ticker, `bin/labfeed` journal below |
 
-All three run in **one** kitty process: `kitty -1 --instance-group gddwidgets --class <name>-widget ...` (see `autostart/widget-*.desktop`). The explicit `--instance-group` matters — plain `--single-instance` groups by class, so three different classes would spawn three processes. Desktop UUIDs in the rules are machine-specific (§10).
+Three of these come straight from upstream projects that already fit the palette — [newsboat](https://github.com/newsboat/newsboat), [calcurse](https://github.com/lfos/calcurse), [cbonsai](https://github.com/jallbrit/cbonsai) — themed to graphite via `config/newsboat-lab/config` and `config/calcurse/conf`.
+
+**Lab = biology.** `bin/bionews` is a newsboat wrapper with its own config, feed list and cache (`~/.config/newsboat-lab/`), so it never touches a normal newsboat setup. Feeds ship in `config/newsboat-lab/urls`: bioRxiv, Nature, Science news, PLOS Biology, Cell, ScienceDaily biology, Quanta biology. Edit that file to make it your own field. `bin/biopaper` rotates through the newest bioRxiv preprint abstracts (refetch 15 min, rotate 25 s; `j`/`k` to move, `r` to reload) — note bioRxiv serves **RSS 1.0/RDF**, so every element is namespaced and a plain `find("item")` returns nothing; it matches on local tag names instead.
+
+All widgets run in **one** kitty process: `kitty -1 --instance-group gddwidgets --class <name>-widget ...` (see `autostart/widget-*.desktop`). The explicit `--instance-group` matters — plain `--single-instance` groups by class, so each class would spawn its own process. Eight windows for ~118 MB of kitty plus ~68 MB of payloads.
+
+Two gotchas: KWin applies force geometry when a window is **created**, so after editing rules for an already-open widget you must close and relaunch it — `qdbus org.kde.KWin /KWin reconfigure` alone won't move it. And launching widgets onto other desktops normally drags you along; set `FocusStealingPreventionLevel=4` in `kwinrc` `[Windows]` for the duration of the launch, then put it back. Desktop UUIDs in the rules are machine-specific (§10).
 
 ## 12. Going lighter (RAM)
 

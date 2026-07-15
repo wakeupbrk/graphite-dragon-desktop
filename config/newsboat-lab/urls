@@ -1,0 +1,7 @@
+http://connect.biorxiv.org/biorxiv_xml.php?subject=all "~bioRxiv · preprints"
+https://www.nature.com/nature.rss "~Nature"
+https://www.science.org/rss/news_current.xml "~Science · news"
+https://journals.plos.org/plosbiology/feed/atom "~PLOS Biology"
+https://www.cell.com/cell/current.rss "~Cell · current issue"
+https://www.sciencedaily.com/rss/plants_animals/biology.xml "~ScienceDaily · biology"
+https://api.quantamagazine.org/feed/?category=biology "~Quanta · biology"
