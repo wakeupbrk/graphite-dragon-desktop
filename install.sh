@@ -10,7 +10,7 @@ backup() { [ -e "$1" ] && cp -r "$1" "$1.bak-gdd" && say "backed up $1 -> $1.bak
 
 say "Installing scripts to ~/.local/bin"
 mkdir -p ~/.local/bin
-install -m 755 bin/vinylctl bin/starwars-scene bin/panel-fastfetch.sh ~/.local/bin/
+install -m 755 bin/vinylctl bin/starwars-scene bin/panel-fastfetch.sh bin/workdeck bin/labfeed ~/.local/bin/
 
 say "Installing PipeWire equalizer sink (vinylctl EQ)"
 mkdir -p ~/.config/pipewire/pipewire.conf.d
@@ -49,7 +49,7 @@ cp config/btop/themes/graphite.theme ~/.config/btop/themes/
 
 say "Installing autostart entries"
 mkdir -p ~/.config/autostart
-for f in autostart/panel-*.desktop; do
+for f in autostart/panel-*.desktop autostart/widget-*.desktop; do
     sed "s|__HOME__|$HOME|g" "$f" > ~/.config/autostart/"$(basename "$f")"
 done
 
@@ -105,12 +105,16 @@ else
     say "SKIPPED top bar: install quickshell + inotify-tools first (sudo dnf install quickshell inotify-tools), then re-run"
 fi
 
-say "Setting KWin window animations (smooth scale/fade, no shatter/wobble)"
+say "Setting KWin window animations (glide, smooth frame pacing)"
 kwriteconfig6 --file kwinrc --group Plugins --key fallapartEnabled false
 kwriteconfig6 --file kwinrc --group Plugins --key wobblywindowsEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled true
+kwriteconfig6 --file kwinrc --group Plugins --key translucencyEnabled false
+kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled false
+kwriteconfig6 --file kwinrc --group Plugins --key glideEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key maximizeEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key fadingpopupsEnabled true
+kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy High
+kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 1.2
 qdbus org.kde.KWin /KWin reconfigure 2>/dev/null || true
 
 say "Done. Remaining manual steps (see docs/TUTORIAL.md):"

@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""workdeck — pomodoro + todo TUI for the Work desktop (graphite-mint).
+
+Keys: space start/pause pomodoro, r reset, f flip work/break,
+      a add task, d mark done, x delete, j/k or arrows move, q quit.
+Todo persists to ~/.local/share/workdeck/todo.json.
+"""
+import json, os, select, signal, sys, termios, time, tty
+
+# graphite-mint palette (Work desktop)
+BG      = "\x1b[48;2;0;0;0m"
+DIM     = "\x1b[38;2;58;120;95m"
+MID     = "\x1b[38;2;95;185;145m"
+BRIGHT  = "\x1b[38;2;176;255;216m"
+WHITE   = "\x1b[38;2;235;255;245m"
+RED     = "\x1b[38;2;255;159;176m"
+RESET   = "\x1b[0m"
+
+STATE_DIR = os.path.expanduser("~/.local/share/workdeck")
+TODO_PATH = os.path.join(STATE_DIR, "todo.json")
+
+DIGITS = {  # 3x5 block digits
+ "0":["███","█ █","█ █","█ █","███"], "1":["  █","  █","  █","  █","  █"],
+ "2":["███","  █","███","█  ","███"], "3":["███","  █","███","  █","███"],
+ "4":["█ █","█ █","███","  █","  █"], "5":["███","█  ","███","  █","███"],
+ "6":["███","█  ","███","█ █","███"], "7":["███","  █","  █","  █","  █"],
+ "8":["███","█ █","███","█ █","███"], "9":["███","█ █","███","  █","███"],
+ ":":["   "," █ ","   "," █ ","   "],
+}
+
+WORK_MIN, BREAK_MIN = 25, 5
+
+
+def load_todo():
+    try:
+        with open(TODO_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_todo(items):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = TODO_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(items, f, indent=1)
+    os.replace(tmp, TODO_PATH)
+
+
+def big_time(s):
+    rows = ["", "", "", "", ""]
+    for ch in s:
+        g = DIGITS.get(ch, ["   "] * 5)
+        for i in range(5):
+            rows[i] += g[i] + " "
+    return rows
+
+
+class Deck:
+    def __init__(self):
+        self.todo = load_todo()
+        self.sel = 0
+        self.mode = "work"
+        self.left = WORK_MIN * 60
+        self.running = False
+        self.last = time.monotonic()
+        self.adding = False
+        self.buf = ""
+        self.done_sessions = 0
+
+    def tick(self):
+        now = time.monotonic()
+        if self.running:
+            self.left -= now - self.last
+            if self.left <= 0:
+                # session over: flip mode, ring the terminal bell
+                sys.stdout.write("\a")
+                if self.mode == "work":
+                    self.done_sessions += 1
+                    self.mode, self.left = "break", BREAK_MIN * 60
+                else:
+                    self.mode, self.left = "work", WORK_MIN * 60
+                self.running = False
+        self.last = now
+
+    def flip(self):
+        self.mode = "break" if self.mode == "work" else "work"
+        self.left = (BREAK_MIN if self.mode == "break" else WORK_MIN) * 60
+        self.running = False
+
+    def draw(self, w, h):
+        out = ["\x1b[H"]
+        pad = " " * 2
+        title = "WORK DECK" if self.mode == "work" else "BREAK"
+        state = "▶ running" if self.running else "⏸ paused"
+        out.append(f"{BG}\x1b[2J{DIM}{pad}╭{'─' * (w - 6)}╮")
+        out.append(f"{pad}│ {BRIGHT}{title:<12}{DIM}{state:>{w - 21}} │")
+        out.append(f"{pad}│{' ' * (w - 6)}│")
+        m, s = divmod(max(0, int(self.left)), 60)
+        color = MID if self.mode == "work" else BRIGHT
+        for row in big_time(f"{m:02d}:{s:02d}"):
+            out.append(f"{pad}│  {color}{row:<{w - 10}}{DIM}│")
+        frac = 1 - self.left / ((WORK_MIN if self.mode == "work" else BREAK_MIN) * 60)
+        barw = w - 10
+        filled = int(barw * max(0, min(1, frac)))
+        out.append(f"{pad}│  {BRIGHT}{'━' * filled}{DIM}{'┄' * (barw - filled)}  │")
+        out.append(f"{pad}│ {DIM}sessions today: {WHITE}{self.done_sessions}{' ' * (w - 25 - len(str(self.done_sessions)))}{DIM}│")
+        out.append(f"{pad}├{'─' * (w - 6)}┤")
+        out.append(f"{pad}│ {BRIGHT}TODO{DIM}{' ' * (w - 12)}│")
+        listing = self.todo[-(h - 17):] if len(self.todo) > h - 17 else self.todo
+        base = len(self.todo) - len(listing)
+        for i, item in enumerate(listing):
+            idx = base + i
+            cur = "▸" if idx == self.sel else " "
+            mark = f"{MID}✓" if item["done"] else f"{DIM}○"
+            style = DIM if item["done"] else WHITE
+            text = item["text"][: w - 14]
+            out.append(f"{pad}│ {BRIGHT}{cur} {mark} {style}{text:<{w - 12}}{DIM}│")
+        for _ in range(max(0, (h - 17) - len(listing))):
+            out.append(f"{pad}│{' ' * (w - 6)}│")
+        if self.adding:
+            out.append(f"{pad}│ {BRIGHT}+ {WHITE}{self.buf[-(w - 12):]:<{w - 10}}{DIM}│")
+        else:
+            out.append(f"{pad}│ {DIM}space timer · a add · d done · x del · f flip{' ' * max(0, w - 51)}│")
+        out.append(f"{pad}╰{'─' * (w - 6)}╯{RESET}")
+        sys.stdout.write("\n".join(out))
+        sys.stdout.flush()
+
+    def key(self, k):
+        if self.adding:
+            if k in ("\r", "\n"):
+                if self.buf.strip():
+                    self.todo.append({"text": self.buf.strip(), "done": False})
+                    save_todo(self.todo)
+                self.adding, self.buf = False, ""
+            elif k == "\x1b":
+                self.adding, self.buf = False, ""
+            elif k in ("\x7f", "\b"):
+                self.buf = self.buf[:-1]
+            elif k.isprintable():
+                self.buf += k
+            return True
+        if k == "q":
+            return False
+        if k == " ":
+            self.running = not self.running
+            self.last = time.monotonic()
+        elif k == "r":
+            self.left = (WORK_MIN if self.mode == "work" else BREAK_MIN) * 60
+            self.running = False
+        elif k == "f":
+            self.flip()
+        elif k == "a":
+            self.adding = True
+        elif k in ("d",) and self.todo:
+            self.todo[self.sel]["done"] = not self.todo[self.sel]["done"]
+            save_todo(self.todo)
+        elif k == "x" and self.todo:
+            self.todo.pop(self.sel)
+            self.sel = max(0, min(self.sel, len(self.todo) - 1))
+            save_todo(self.todo)
+        elif k in ("j", "\x1b[B"):
+            self.sel = min(len(self.todo) - 1, self.sel + 1) if self.todo else 0
+        elif k in ("k", "\x1b[A"):
+            self.sel = max(0, self.sel - 1)
+        return True
+
+
+def main():
+    deck = Deck()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
+    sys.stdout.write("\x1b[?25l\x1b[?1049h")
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        while True:
+            deck.tick()
+            size = os.get_terminal_size()
+            deck.draw(size.columns, size.lines)
+            r, _, _ = select.select([fd], [], [], 0.25)
+            if r:
+                k = os.read(fd, 8).decode(errors="ignore")
+                if not deck.key(k):
+                    break
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write("\x1b[?1049l\x1b[?25h" + RESET)
+
+
+if __name__ == "__main__":
+    main()

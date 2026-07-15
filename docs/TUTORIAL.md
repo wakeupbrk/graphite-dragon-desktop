@@ -153,7 +153,34 @@ Gotchas we hit:
 - The upstream zombie-killer in `workspaces.sh` kills any process whose cmdline contains "workspaces.sh", including your terminal; our version skips the ancestor PID chain.
 - Window animations that fit the vibe: `fallapart` and `wobblywindows` **off**, `scale` + `maximize` + `fadingpopups` **on** (install.sh sets these).
 
-## 11. Troubleshooting
+## 11. Per-desktop widgets (Work / Fun / Lab)
+
+The six dashboard panels live on desktop 1 (Main) only — the other desktops each get one purpose widget instead, pinned by KWin rules (`desktops=` + force) into btop's slot:
+
+| desktop | widget | what |
+|---|---|---|
+| 2 Work | `bin/workdeck` | pomodoro + persistent todo (mint) |
+| 3 Fun | `bin/vinylctl` (2nd instance) | full-size media deck; media apps also auto-route here |
+| 4 Lab | `bin/labfeed` | live colorized system journal (amber) |
+
+All three run in **one** kitty process: `kitty -1 --instance-group gddwidgets --class <name>-widget ...` (see `autostart/widget-*.desktop`). The explicit `--instance-group` matters — plain `--single-instance` groups by class, so three different classes would spawn three processes. Desktop UUIDs in the rules are machine-specific (§10).
+
+## 12. Going lighter (RAM)
+
+Worth disabling on a desktop that doesn't use KDE PIM or file search:
+
+```bash
+akonadictl stop && systemctl --user mask akonadi_control.service   # PIM stack + its MySQL (~500 MB)
+balooctl6 disable                                                   # file indexer
+# stop Discover's resident update notifier (~350 MB!) and calendar reminders:
+for a in org.kde.discover.notifier org.kde.kalendarac; do
+  printf '[Desktop Entry]\nType=Application\nName=%s\nHidden=true\n' "$a" > ~/.config/autostart/$a.desktop
+done
+```
+
+Also part of the smoothness story: the `translucency` effect blurs *while dragging windows* — expensive on Asahi's GPU and the main source of janky move/resize. install.sh disables it.
+
+## 13. Troubleshooting
 
 - **Panels in the wrong place after a resolution/scale change** → recalc rule geometry (§5), `qdbus org.kde.KWin /KWin reconfigure`.
 - **A stray bright dot on the desktop** → some panel's terminal cursor is visible; make the panel app hide it (`\e[?25l`).

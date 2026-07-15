@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=widget-labfeed
+Exec=kitty -1 --instance-group gddwidgets --class labfeed-widget --config __HOME__/.config/kitty/panels/labfeed.conf __HOME__/.local/bin/labfeed
+X-KDE-autostart-after=panel

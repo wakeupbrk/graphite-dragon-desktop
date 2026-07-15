@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=widget-workdeck
+Exec=kitty -1 --instance-group gddwidgets --class workdeck-widget --config __HOME__/.config/kitty/panels/workdeck.conf __HOME__/.local/bin/workdeck
+X-KDE-autostart-after=panel

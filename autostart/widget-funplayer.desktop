@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=widget-funplayer
+Exec=kitty -1 --instance-group gddwidgets --class funplayer-widget --config __HOME__/.config/kitty/panels/funplayer.conf __HOME__/.local/bin/vinylctl
+X-KDE-autostart-after=panel

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# labfeed — live system journal for the Lab desktop, graphite-amber palette.
+DIM=$'\x1b[38;2;168;124;58m'
+MID=$'\x1b[38;2;216;156;74m'
+BRIGHT=$'\x1b[38;2;255;232;192m'
+RED=$'\x1b[38;2;255;159;176m'
+RESET=$'\x1b[0m'
+
+printf '\x1b[?25l'
+trap 'printf "\x1b[?25h%s" "$RESET"' EXIT
+
+printf '%s╭── LAB ── system journal ──╮%s\n\n' "$MID" "$RESET"
+
+journalctl -f -n 40 --no-hostname -o short-iso 2>/dev/null | \
+while IFS= read -r line; do
+    ts="${line%% *}"; rest="${line#* }"
+    unit="${rest%%:*}"; msg="${rest#*: }"
+    case "$line" in
+        *rror*|*fail*|*Fail*) c="$RED" ;;
+        *warn*|*Warn*)        c="$BRIGHT" ;;
+        *)                    c="$MID" ;;
+    esac
+    printf '%s%s %s%-28.28s %s%s%s\n' "$DIM" "${ts:11:8}" "$BRIGHT" "$unit" "$c" "$msg" "$RESET"
+done
