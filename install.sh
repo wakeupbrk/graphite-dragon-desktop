@@ -118,12 +118,18 @@ else
     say "SKIPPED top bar: install quickshell + inotify-tools first (sudo dnf install quickshell inotify-tools), then re-run"
 fi
 
-say "Setting KWin window animations (glide, smooth frame pacing)"
+say "Setting KWin window animations (macOS-style scale, smooth frame pacing)"
 kwriteconfig6 --file kwinrc --group Plugins --key fallapartEnabled false
 kwriteconfig6 --file kwinrc --group Plugins --key wobblywindowsEnabled false
 kwriteconfig6 --file kwinrc --group Plugins --key translucencyEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key glideEnabled true
+# scale and glide are both in KWin's "toplevel-open-close-animation" exclusive
+# category — only one can run. scale = macOS-style pop; glide's subtle rotate
+# reads as the window just vanishing.
+kwriteconfig6 --file kwinrc --group Plugins --key glideEnabled false
+kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled true
+kwriteconfig6 --file kwinrc --group Effect-scale --key Duration 180
+kwriteconfig6 --file kwinrc --group Effect-scale --key InScale 0.80
+kwriteconfig6 --file kwinrc --group Effect-scale --key OutScale 0.80
 kwriteconfig6 --file kwinrc --group Plugins --key maximizeEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key fadingpopupsEnabled true
 kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy High
