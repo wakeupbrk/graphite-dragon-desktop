@@ -1,0 +1,14 @@
+[Unit]
+Description=Quickshell top bar (graphite-ice)
+After=plasma-workspace.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=%h/.config/hypr/scripts/topbar-launch.sh
+Restart=on-failure
+RestartSec=2
+Slice=app.slice
+
+[Install]
+WantedBy=graphical-session.target

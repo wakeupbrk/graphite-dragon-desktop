@@ -1,0 +1,51 @@
+--- a/quickshell/TopBar.qml
++++ b/quickshell/TopBar.qml
+@@ -57,7 +57,8 @@
+ 
+             height: barHeight
+             margins { top: s(8); bottom: 0; left: s(4); right: s(4) }
+-            exclusiveZone: barHeight 
++            // Reserve top margin + bar + a small gap so windows never touch the bar
++            exclusiveZone: barHeight + s(16)
+             color: "transparent"
+ 
+             MatugenColors {
+@@ -1281,7 +1282,7 @@
+                                     Text { anchors.verticalCenter: parent.verticalCenter; text: "󰌌"; font.family: "Iosevka Nerd Font"; font.pixelSize: barWindow.s(16); color: parent.parent.isHovered ? mocha.text : mocha.overlay2 }
+                                     Text { anchors.verticalCenter: parent.verticalCenter; text: barWindow.kbLayout; font.family: "JetBrains Mono"; font.pixelSize: barWindow.s(13); font.weight: Font.Black; color: mocha.text }
+                                 }
+-                                MouseArea { id: kbMouse; anchors.fill: parent; hoverEnabled: true; onClicked: Quickshell.execDetached(["hyprctl", "switchxkblayout", "main", "next"]) }
++                                MouseArea { id: kbMouse; anchors.fill: parent; hoverEnabled: true; onClicked: Quickshell.execDetached(["busctl", "--user", "call", "org.kde.keyboard", "/Layouts", "org.kde.KeyboardLayouts", "switchToNextLayout"]) }
+                             }
+ 
+                             Rectangle {
+--- a/qs_manager.sh
++++ b/qs_manager.sh
+@@ -18,9 +18,10 @@
+     # Send IPC command directly to Main.qml via Quickshell's native IPC handler
+     quickshell -p "$SHELL_QML_PATH" ipc call main handleCommand "close" "" "" >/dev/null 2>&1
+ 
+-    CMD="workspace $ACTION"
+-    [[ "$TARGET" == "move" ]] && CMD="movetoworkspace $ACTION"
+-    hyprctl --batch "dispatch $CMD" >/dev/null 2>&1
++    # KWin: switch desktop via the global shortcut — unlike a raw property
++    # write, this emits currentChanged so the bar and palette follow.
++    qdbus org.kde.kglobalaccel /component/kwin \
++        org.kde.kglobalaccel.Component.invokeShortcut "Switch to Desktop $ACTION" >/dev/null 2>&1
+     exit 0
+ fi
+ 
+--- a/quickshell/watchers/kb_wait.sh
++++ b/quickshell/watchers/kb_wait.sh
+@@ -5,8 +5,9 @@
+ mkfifo "$PIPE" 2>/dev/null
+ trap 'rm -f "$PIPE"; kill $(jobs -p) 2>/dev/null; exit 0' EXIT INT TERM
+ 
+-if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+-    LC_ALL=C socat -U - UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock 2>/dev/null | grep --line-buffered "activelayout>>" > "$PIPE" &
++if busctl --user status org.kde.keyboard >/dev/null 2>&1; then
++    # KDE: wait for a layoutChanged signal
++    LC_ALL=C dbus-monitor --session "type='signal',interface='org.kde.KeyboardLayouts',member='layoutChanged'" 2>/dev/null | grep --line-buffered -m1 "layoutChanged" > "$PIPE" &
+ else
+     sleep 10 > "$PIPE" &
+ fi

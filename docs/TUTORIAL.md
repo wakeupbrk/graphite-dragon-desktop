@@ -31,7 +31,7 @@ Reference geometry (logical px, 1789×1112 screen at 1.7× scale — **adapt to 
 ## 1. Packages
 
 ```bash
-sudo dnf install kitty btop cava fastfetch playerctl
+sudo dnf install kitty btop cava fastfetch playerctl quickshell inotify-tools
 pipx install git+https://github.com/will8211/unimatrix
 ```
 
@@ -50,7 +50,7 @@ sudo dnf install mpd mpc yt-dlp
 
 - **Wallpaper**: `wallpaper/graphite-steel.png` → right-click desktop → Configure.
 - **Icons**: [WhiteSur-dark](https://github.com/vinceliuice/WhiteSur-icon-theme) (macOS Big Sur style), user-level install, then apply in System Settings.
-- **Top bar** (macOS-ish): a 30 px top panel with Kickoff, global appmenu, spacer, systray, clock. For the translucent tint install the *Panel Colorizer* widget: custom background `#14161a` at 0.45 opacity + blur. Panel text color comes from the Plasma style (a dark style with light text, e.g. "Nothing") — Panel Colorizer's foreground override cannot recolor tray icons.
+- **Top bar**: the quickshell bar (see §10) replaces the old 30 px Plasma panel — delete any top Plasma panel or the two will stack.
 - **Terminal palette**: `config/kitty/panels/graphite-theme.conf` — steel/ice colors, `background_opacity 0` so panels float directly on the wallpaper. All six panel configs include it.
 - **btop**: theme `graphite` (included). **cava**: chunky 4-wide bars, Monstercat smoothing, 8-step gradient from deep steel to bright ice tips (included).
 
@@ -135,7 +135,23 @@ Plasma 6 API note if you hack on it: `effects.windowMinimized` no longer exists 
 Verify a window's icon geometry yourself (helps debug *any* dock):
 run a KWin script that reads `window.iconGeometry` — `0,0 0x0` means your dock doesn't publish it.
 
-## 10. Troubleshooting
+## 10. Quickshell top bar (KWin port)
+
+`install.sh` clones [ilyamiro/nixos-configuration](https://github.com/ilyamiro/nixos-configuration) (pinned commit), copies its `scripts/` tree to `~/.config/hypr/scripts/` (paths are hardcoded in the QML — don't rename), applies `topbar/kwin-port.patch`, and drops in our KWin-native replacements:
+
+- `workspaces.sh` — desktops from `org.kde.KWin /VirtualDesktopManager` (busctl + dbus-monitor), same JSON contract as upstream
+- `kb_fetch.sh` — keyboard layout from `org.kde.keyboard`
+- `qs_palette.sh <1-4>` — writes `/tmp/qs_colors.json` (the bar polls it every 1 s); per-desktop palettes: 1 ice / 2 mint / 3 violet / 4 amber
+- `topbar-launch.sh` + `qs-topbar.service` — autostart via systemd user unit
+
+Gotchas we hit:
+- The bar's `exclusiveZone` must be `barHeight + margins`, or windows tuck under the floating bar (patched).
+- Writing KWin's `current` desktop property over D-Bus emits **no signal** — switch via `qdbus org.kde.kglobalaccel /component/kwin invokeShortcut "Switch to Desktop N"` instead, or nothing that listens for `currentChanged` will notice.
+- Never `pkill -f quickshell` from a script — it self-matches the invoking shell. Use `pkill -x quickshell`.
+- The upstream zombie-killer in `workspaces.sh` kills any process whose cmdline contains "workspaces.sh", including your terminal; our version skips the ancestor PID chain.
+- Window animations that fit the vibe: `fallapart` and `wobblywindows` **off**, `scale` + `maximize` + `fadingpopups` **on** (install.sh sets these).
+
+## 11. Troubleshooting
 
 - **Panels in the wrong place after a resolution/scale change** → recalc rule geometry (§5), `qdbus org.kde.KWin /KWin reconfigure`.
 - **A stray bright dot on the desktop** → some panel's terminal cursor is visible; make the panel app hide it (`\e[?25l`).

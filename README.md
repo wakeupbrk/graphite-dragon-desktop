@@ -8,6 +8,7 @@ A graphite-steel terminal-panel desktop for **Fedora Asahi Linux (KDE Plasma / W
 
 | Corner | Panel | What it is |
 |---|---|---|
+| top edge | **quickshell bar** ★ | ilyamiro's QuickShell top bar ported to KWin — workspace pills, MPRIS, tray, per-desktop palettes |
 | top-left | **fastfetch** | System info beside a steel dragon, live-refreshing *without* flicker |
 | top-right | **btop** | Full system monitor (interactive) |
 | bottom-left | **cava** | Audio spectrum bars with a steel gradient |
@@ -20,6 +21,9 @@ A graphite-steel terminal-panel desktop for **Fedora Asahi Linux (KDE Plasma / W
 Everything is pinned into place by forced KWin window rules — panels never move, never take focus (except the interactive ones), never appear in the taskbar. A patched [krema](https://github.com/isac322/krema) dock with auto-hide and a custom KWin minimize animation (`kremadive`) round it out.
 
 ## Highlights
+
+### 🧊 quickshell top bar — Hyprland rice, KWin blood
+[ilyamiro's](https://github.com/ilyamiro/nixos-configuration) gorgeous QuickShell bar, ported off Hyprland: workspaces, MPRIS controls, tray, weather, network/battery — all driven by KWin D-Bus instead of hyprctl/sockets. Four named desktops (Main/Work/Fun/Lab) each recolor the whole bar live: ice, mint, violet, amber. Upstream ships no license, so `install.sh` clones it and applies our patch (`topbar/kwin-port.patch`) rather than vendoring the code.
 
 ### 🎵 vinylctl — the media deck
 ![Media corner](screenshots/media-corner.png)
