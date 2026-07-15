@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Equalizer Panel
+Exec=kitty --class eq-panel --config __HOME__/.config/kitty/panels/eq.conf __HOME__/.local/bin/vinylctl --eq
+X-KDE-autostart-after=panel
+NoDisplay=true

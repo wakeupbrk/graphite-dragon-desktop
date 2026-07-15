@@ -99,9 +99,28 @@ skiptaskbarrule=3
 wmclass=starwars-panel
 wmclassmatch=1
 
+[a7581609-5936-4c0c-bc7b-8b9bcf1594fc]
+Description=equalizer
+below=true
+belowrule=3
+ignoregeometry=true
+ignoregeometryrule=3
+noborder=true
+noborderrule=3
+position=1244,861
+positionrule=2
+size=534,251
+sizerule=2
+skippager=true
+skippagerrule=3
+skiptaskbar=true
+skiptaskbarrule=3
+wmclass=eq-panel
+wmclassmatch=1
+
 [General]
-count=6
-rules=0f485464-1ac6-4f03-96d0-3d490d9543e4,fbf8d317-8a5f-4674-aeb4-2ec660c79e07,1f1f1cbe-e92c-435f-a2a6-86332ffc0602,92d354d2-96d2-4f33-abd1-cd357d7343dc,a3e91c74-5b02-4f8d-9c11-7d2e84f0b6a1,b4f7d2e8-1a3c-4e5f-8a90-2c6d1e9f7b33
+count=7
+rules=0f485464-1ac6-4f03-96d0-3d490d9543e4,fbf8d317-8a5f-4674-aeb4-2ec660c79e07,1f1f1cbe-e92c-435f-a2a6-86332ffc0602,92d354d2-96d2-4f33-abd1-cd357d7343dc,a3e91c74-5b02-4f8d-9c11-7d2e84f0b6a1,b4f7d2e8-1a3c-4e5f-8a90-2c6d1e9f7b33,a7581609-5936-4c0c-bc7b-8b9bcf1594fc
 
 [fbf8d317-8a5f-4674-aeb4-2ec660c79e07]
 Description=fastfetch

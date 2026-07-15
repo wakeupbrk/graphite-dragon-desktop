@@ -10,6 +10,8 @@ Keys: space play/pause | n/b next/prev | ←/→ seek 5s | ↑/↓ volume | m mu
       tab cycle player | e equalizer | q quit
 EQ:   ←/→ pick band | ↑/↓ gain | +/- preamp | p preset | f flat | t on/off
       0 zero band | e/esc back
+
+Run `vinylctl --eq` for a dedicated equalizer-only panel.
 """
 import json
 import math
@@ -78,7 +80,26 @@ class EQ:
         self.node = None
         self.sel = 4
         self.synced = False
+        self.locked = False  # --eq: dedicated EQ panel, no player view
+        self._mtime = None
         self.load()
+        self._stat()
+
+    def _stat(self):
+        try:
+            self._mtime = os.stat(EQ_CONF).st_mtime
+        except OSError:
+            self._mtime = None
+
+    def check_reload(self):
+        """Pick up changes another vinylctl instance saved (already applied)."""
+        try:
+            mt = os.stat(EQ_CONF).st_mtime
+        except OSError:
+            return
+        if mt != self._mtime:
+            self._mtime = mt
+            self.load()
 
     def load(self):
         try:
@@ -97,6 +118,7 @@ class EQ:
             with open(EQ_CONF, "w") as f:
                 json.dump({"enabled": self.enabled, "preamp": self.preamp,
                            "gains": self.gains, "preset": self.preset}, f, indent=1)
+            self._stat()
         except Exception:
             pass
 
@@ -366,7 +388,8 @@ def draw_eq(eq):
     put(1, 15, rgb(C_ICE if on else C_DIM, "[ ON ]" if on else "[ OFF]"))
     put(1, 23, rgb(C_ACCENT, "‹") + rgb(C_TEXT, f" {eq.preset[:14]:^14} ") + rgb(C_ACCENT, "›"))
     put(1, 44, rgb(C_DIM, f"{EQ_FREQS[eq.sel]}Hz {eq.gains[eq.sel]:+.1f}dB"[:max(0, cols - 48)]))
-    put(1, cols - 2, rgb(C_DIM, "✕"))
+    if not eq.locked:
+        put(1, cols - 2, rgb(C_DIM, "✕"))
 
     # preamp
     frac = (eq.preamp + 12) / 24
@@ -411,8 +434,10 @@ def draw_eq(eq):
         lbl = EQ_FREQS[i]
         put(top + h, x, rgb(C_ICE if i == eq.sel else C_DIM, f"{lbl:^{barw}}"[:bw]))
 
-    put(rows, 2, rgb(C_DIM,
-        "drag bars · scroll=fine · ‹›/p preset · f flat · t on/off · e back"[:cols - 2]))
+    hint = "drag bars · scroll=fine · ‹›/p preset · f flat · t on/off"
+    if not eq.locked:
+        hint += " · e back"
+    put(rows, 2, rgb(C_DIM, hint[:cols - 2]))
     sys.stdout.write("".join(out))
     sys.stdout.flush()
 
@@ -464,7 +489,7 @@ def handle_eq_mouse(b, mx, my, kind, eq):
             eq.cycle_preset(-1)
         elif abs(mx - g["eq_next_x"]) <= 1:
             eq.cycle_preset(1)
-        elif mx >= g["eq_close_x"] - 1:
+        elif mx >= g["eq_close_x"] - 1 and not eq.locked:
             return "back"
         return None
     if my == g["eq_pre_row"] and mx >= g["eq_pre_x"]:
@@ -481,13 +506,19 @@ def handle_eq_mouse(b, mx, my, kind, eq):
 
 
 def main():
+    dedicated = "--eq" in sys.argv[1:]
     st = State()
-    st.poll()
     eq = EQ()
-    eq.apply()
+    eq.locked = dedicated
+    if dedicated:
+        eq.apply()  # this instance owns startup-apply for the whole system
+    else:
+        st.poll()
+        eq.find_node()
+        eq.synced = eq.node is not None  # EQ panel applies; don't double-apply
     angle = 0.0
     last_poll = 0.0
-    mode = "player"
+    mode = "eq" if dedicated else "player"
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     tty.setcbreak(fd)
@@ -497,8 +528,10 @@ def main():
         while True:
             now = time.monotonic()
             if now - last_poll >= POLL_EVERY:
-                st.poll()
-                if not eq.synced:  # pipewire not up yet at login, or restarted
+                if not dedicated:
+                    st.poll()
+                eq.check_reload()
+                if dedicated and not eq.synced:  # pipewire not up yet, or restarted
                     eq.apply()
                 last_poll = now
             if st.status == "Playing":
@@ -530,7 +563,7 @@ def main():
             if k in ("q", "\x03"):
                 break
             if mode == "eq":
-                if k in ("e", "\x1b"):
+                if k in ("e", "\x1b") and not dedicated:
                     mode = "player"
                     sys.stdout.write("\x1b[2J")
                 elif k == "\x1b[C":

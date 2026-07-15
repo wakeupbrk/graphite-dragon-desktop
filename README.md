@@ -13,7 +13,7 @@ A graphite-steel terminal-panel desktop for **Fedora Asahi Linux (KDE Plasma / W
 | bottom-left | **cava** | Audio spectrum bars with a steel gradient |
 | bottom-center-right | **unimatrix** | Matrix rain, katakana glyphs |
 | right | **vinylctl** ★ | Custom MPRIS "now playing" deck — a vinyl record that actually spins |
-| bottom-right | **starwars-scene** ★ | Custom looped X-wing vs TIE fighter battle |
+| bottom-right | **vinylctl --eq** ★ | Dedicated 10-band system-wide equalizer panel |
 
 ★ = purpose-built for this setup, included in [`bin/`](bin/).
 
@@ -28,10 +28,10 @@ A ~600-line zero-dependency Python TUI that controls **whatever is playing anywh
 - half-block-pixel vinyl that spins while music plays, stops on pause
 - full mouse support: click the disc to pause, click the progress bar to seek, click/scroll the volume bar
 - keyboard: `space` pause · `n`/`b` skip · `←`/`→` seek · `↑`/`↓` system volume (PipeWire) · `m` mute · `tab` cycle players
-- **built-in 10-band equalizer** (`e` or click `[⌁EQ]`): a system-wide PipeWire filter-chain sink ([`config/pipewire`](config/pipewire/pipewire.conf.d/vinylctl-eq.conf)) with Apple-Music-style presets (Loudness, Bass Booster, Vocal, …), a ±12 dB preamp for quiet speakers, drag-the-bars mouse control, live updates via `pw-cli`, settings persisted to `~/.config/vinylctl/eq.json`
+- **built-in 10-band equalizer** (`e` or click `[⌁EQ]`, or run `vinylctl --eq` as a dedicated always-on panel): a system-wide PipeWire filter-chain sink ([`config/pipewire`](config/pipewire/pipewire.conf.d/vinylctl-eq.conf)) with Apple-Music-style presets (Loudness, Bass Booster, Vocal, …), a ±12 dB preamp for quiet speakers, drag-the-bars mouse control, live updates via `pw-cli`, settings persisted to `~/.config/vinylctl/eq.json` and kept in sync across instances
 
-### ⚔️ starwars-scene — the forever war
-X-wings vs TIE fighters over a drifting parallax starfield: lasers, explosions, respawns. Runs forever at 12 fps in its own non-focusable panel. (Requires `disable_ligatures always` in the kitty config — ship ASCII gets eaten by font ligatures otherwise. Included.)
+### ⚔️ starwars-scene — the forever war (retired, still included)
+X-wings vs TIE fighters over a drifting parallax starfield: lasers, explosions, respawns. Runs forever at 12 fps in its own non-focusable panel. (Requires `disable_ligatures always` in the kitty config — ship ASCII gets eaten by font ligatures otherwise. Included.) Its bottom-right slot is now the equalizer panel; re-enable it by removing `Hidden=true` from [`autostart/panel-starwars.desktop`](autostart/panel-starwars.desktop).
 
 ### 🐲 fastfetch without the glitch
 ![Fastfetch dragon](screenshots/fastfetch-dragon.png)
