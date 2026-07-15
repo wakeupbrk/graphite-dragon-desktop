@@ -24,10 +24,11 @@ Everything is pinned into place by forced KWin window rules — panels never mov
 ### 🎵 vinylctl — the media deck
 ![Media corner](screenshots/media-corner.png)
 
-A ~350-line zero-dependency Python TUI that controls **whatever is playing anywhere** (browser tabs included) via MPRIS/playerctl:
+A ~600-line zero-dependency Python TUI that controls **whatever is playing anywhere** (browser tabs included) via MPRIS/playerctl:
 - half-block-pixel vinyl that spins while music plays, stops on pause
 - full mouse support: click the disc to pause, click the progress bar to seek, click/scroll the volume bar
 - keyboard: `space` pause · `n`/`b` skip · `←`/`→` seek · `↑`/`↓` system volume (PipeWire) · `m` mute · `tab` cycle players
+- **built-in 10-band equalizer** (`e` or click `[⌁EQ]`): a system-wide PipeWire filter-chain sink ([`config/pipewire`](config/pipewire/pipewire.conf.d/vinylctl-eq.conf)) with Apple-Music-style presets (Loudness, Bass Booster, Vocal, …), a ±12 dB preamp for quiet speakers, drag-the-bars mouse control, live updates via `pw-cli`, settings persisted to `~/.config/vinylctl/eq.json`
 
 ### ⚔️ starwars-scene — the forever war
 X-wings vs TIE fighters over a drifting parallax starfield: lasers, explosions, respawns. Runs forever at 12 fps in its own non-focusable panel. (Requires `disable_ligatures always` in the kitty config — ship ASCII gets eaten by font ligatures otherwise. Included.)

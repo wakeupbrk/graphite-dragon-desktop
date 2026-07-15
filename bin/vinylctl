@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """vinylctl — spinning-vinyl MPRIS controller for the desktop media panel.
 
-Controls whatever is playing (browser, mpv, ...) via playerctl, and the
-system volume via wpctl. Styled for the graphite-steel desktop theme.
+Controls whatever is playing (browser, mpv, ...) via playerctl, the system
+volume via wpctl, and a 10-band PipeWire equalizer (filter-chain sink
+"vinylctl_eq", see ~/.config/pipewire/pipewire.conf.d/vinylctl-eq.conf).
+Styled for the graphite-steel desktop theme.
 
 Keys: space play/pause | n/b next/prev | ←/→ seek 5s | ↑/↓ volume | m mute
-      tab cycle player | q quit
+      tab cycle player | e equalizer | q quit
+EQ:   ←/→ pick band | ↑/↓ gain | +/- preamp | p preset | f flat | t on/off
+      0 zero band | e/esc back
 """
+import json
 import math
 import os
 import re
@@ -36,6 +41,23 @@ FRAME = 0.1
 MOUSE_RE = re.compile(r"\x1b\[<(\d+);(\d+);(\d+)([Mm])")
 GEOM = {}
 
+EQ_CONF = os.path.expanduser("~/.config/vinylctl/eq.json")
+EQ_FREQS = ["32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"]
+EQ_PRESETS = [
+    ("Flat",           [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    ("Loudness",       [6, 4, 0, 0, -2, 0, -1, -4, 4, 1]),
+    ("Bass Booster",   [5.5, 4.5, 3.5, 2.5, 1.5, 0, 0, 0, 0, 0]),
+    ("Treble Booster", [0, 0, 0, 0, 0, 1.5, 2.5, 3.5, 4.5, 5.5]),
+    ("Vocal",          [-1.5, -3, -3, 1.5, 4, 4, 3, 1.5, 0, -1.5]),
+    ("Rock",           [5, 4, 3, 1.5, -0.5, -1, 0.5, 2.5, 3.5, 4.5]),
+    ("Pop",            [-1.5, -1, 0, 2, 4, 4, 2, 0, -1, -1.5]),
+    ("Jazz",           [4, 3, 1, 2, -1.5, -1.5, 0, 1, 3, 3.5]),
+    ("Electronic",     [4.5, 4, 1.5, 0, -2, 2, 1, 1.5, 4, 4.5]),
+    ("Hip-Hop",        [5, 4, 1.5, 3, -1, -1, 1.5, -0.5, 2, 3]),
+    ("Acoustic",       [5, 5, 4, 1, 2, 2, 3.5, 4, 3.5, 2]),
+    ("Small Speakers", [5.5, 4.5, 3.5, 2.5, 1.5, 0, -1, -2, -3, -4.5]),
+]
+
 
 def run(cmd, timeout=1.0):
     try:
@@ -43,6 +65,98 @@ def run(cmd, timeout=1.0):
         return r.stdout.strip() if r.returncode == 0 else None
     except Exception:
         return None
+
+
+class EQ:
+    """10-band PipeWire EQ: live via pw-cli, persisted in eq.json."""
+
+    def __init__(self):
+        self.gains = [0.0] * 10
+        self.preamp = 0.0
+        self.enabled = True
+        self.preset = "Flat"
+        self.node = None
+        self.sel = 4
+        self.synced = False
+        self.load()
+
+    def load(self):
+        try:
+            with open(EQ_CONF) as f:
+                d = json.load(f)
+            self.gains = [float(x) for x in (d.get("gains", []) + [0] * 10)[:10]]
+            self.preamp = float(d.get("preamp", 0.0))
+            self.enabled = bool(d.get("enabled", True))
+            self.preset = str(d.get("preset", "Custom"))
+        except Exception:
+            pass
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(EQ_CONF), exist_ok=True)
+            with open(EQ_CONF, "w") as f:
+                json.dump({"enabled": self.enabled, "preamp": self.preamp,
+                           "gains": self.gains, "preset": self.preset}, f, indent=1)
+        except Exception:
+            pass
+
+    def find_node(self):
+        out = run(["pw-dump"], timeout=2.0)
+        if not out:
+            return
+        try:
+            for o in json.loads(out):
+                props = (o.get("info") or {}).get("props") or {}
+                if props.get("node.name") == "vinylctl_eq":
+                    self.node = o["id"]
+                    return
+        except Exception:
+            pass
+
+    def apply(self):
+        if self.node is None:
+            self.find_node()
+        if self.node is None:
+            self.synced = False
+            return False
+        g = self.gains if self.enabled else [0.0] * 10
+        pre = 10 ** ((self.preamp if self.enabled else 0.0) / 20)
+        params = " ".join(f'"eq{i + 1}:Gain" {g[i]:.2f}' for i in range(10))
+        pod = '{ params = [ %s "preamp:Mult" %.4f ] }' % (params, pre)
+        if run(["pw-cli", "set-param", str(self.node), "Props", pod]) is None:
+            self.node = None  # node id changed (pipewire restart) — re-find
+            self.synced = False
+            return False
+        self.synced = True
+        return True
+
+    def set_band(self, i, v):
+        self.gains[i] = max(-12.0, min(12.0, round(v * 2) / 2))
+        self.preset = "Custom"
+        self.apply()
+        self.save()
+
+    def set_preamp(self, v):
+        self.preamp = max(-12.0, min(12.0, round(v * 2) / 2))
+        self.apply()
+        self.save()
+
+    def set_preset(self, idx):
+        name, g = EQ_PRESETS[idx % len(EQ_PRESETS)]
+        self.preset = name
+        self.gains = [float(x) for x in g]
+        self.apply()
+        self.save()
+
+    def cycle_preset(self, step):
+        names = [n for n, _ in EQ_PRESETS]
+        i = names.index(self.preset) if self.preset in names else -step
+        self.set_preset((i + step) % len(EQ_PRESETS))
+
+    def toggle(self):
+        self.enabled = not self.enabled
+        self.apply()
+        self.save()
 
 
 class State:
@@ -154,7 +268,7 @@ def fmt_time(s):
     return f"{s // 60}:{s % 60:02d}"
 
 
-def draw(st, angle):
+def draw(st, angle, eq):
     cols, rows = shutil.get_terminal_size()
     H = rows * 2
     R = min(H // 2 - 2, int(cols * 0.42) // 2)
@@ -183,8 +297,10 @@ def draw(st, angle):
     ix = 2 * (R + 2) + 3
     iw = max(10, cols - ix - 1)
     ln = max(1, rows // 2 - 5)
+    GEOM.clear()
     GEOM.update(cx=cx, cy=cy, R=R, ix=ix, prog_row=ln + 6, prog_w=max(4, iw - 14),
-                vol_row=ln + 8, vol_x=ix + 4, vol_w=max(4, iw - 10))
+                vol_row=ln + 8, vol_x=ix + 4, vol_w=max(4, iw - 10),
+                hint_row=rows - 1)
 
     def put(row, s):
         out.append(f"\x1b[{row};{ix}H\x1b[K" + s)
@@ -211,7 +327,92 @@ def draw(st, angle):
         bar(st.volume, max(4, iw - 10), C_STEEL if not st.muted else C_DISC_B, C_DISC_B) +
         rgb(C_ICE if not st.muted else C_DIM, " " + vol_label))
 
-    put(rows - 1, rgb(C_DIM, "click disc=pause · bars=seek/vol · scroll=vol"[:cols - ix]))
+    eq_c = C_ACCENT if eq.enabled else C_DIM
+    put(rows - 1, rgb(eq_c, "[ ⌁EQ ]") +
+        rgb(C_DIM, " click disc=pause · bars=seek/vol"[:max(0, cols - ix - 7)]))
+    sys.stdout.write("".join(out))
+    sys.stdout.flush()
+
+
+def draw_eq(eq):
+    cols, rows = shutil.get_terminal_size()
+    h = max(6, rows - 7)          # slider rows
+    top = 5
+    gut = 4                       # gutter for dB labels
+    bw = max(4, min(7, (cols - gut - 3) // 10))
+    bx = gut + 2
+    barw = 2 if bw < 6 else 3
+    S = 2 * h                     # half-block sub-cells per column
+    half = S // 2                 # sub index of 0 dB (from bottom)
+    r0 = h // 2                   # text row nearest the 0 dB line
+
+    GEOM.clear()
+    GEOM.update(eq_hdr_row=1, eq_pre_row=3, eq_pre_x=9, eq_pre_w=max(10, cols - 20),
+                eq_top=top, eq_h=h, eq_bx=bx, eq_bw=bw,
+                eq_on_x=15, eq_prev_x=23, eq_next_x=40, eq_close_x=cols - 2)
+
+    out = ["\x1b[H"]
+
+    def put(row, col, s):
+        out.append(f"\x1b[{row};{col}H" + s)
+
+    # clear + line skeletons
+    for r in range(1, rows + 1):
+        out.append(f"\x1b[{r};1H\x1b[K")
+
+    # header: title, on/off chip, preset switcher, selected-band readout, close
+    on = eq.enabled
+    put(1, 2, rgb(C_ICE, "⌁ EQUALIZER"))
+    put(1, 15, rgb(C_ICE if on else C_DIM, "[ ON ]" if on else "[ OFF]"))
+    put(1, 23, rgb(C_ACCENT, "‹") + rgb(C_TEXT, f" {eq.preset[:14]:^14} ") + rgb(C_ACCENT, "›"))
+    put(1, 44, rgb(C_DIM, f"{EQ_FREQS[eq.sel]}Hz {eq.gains[eq.sel]:+.1f}dB"[:max(0, cols - 48)]))
+    put(1, cols - 2, rgb(C_DIM, "✕"))
+
+    # preamp
+    frac = (eq.preamp + 12) / 24
+    put(3, 2, rgb(C_DIM, "preamp ") +
+        bar(frac, GEOM["eq_pre_w"], C_STEEL if on else C_DISC_B, C_DISC_B) +
+        rgb(C_ICE if on else C_DIM, f" {eq.preamp:+.1f}dB"))
+
+    # gutter labels + zero line
+    put(top, 1, rgb(C_DIM, "+12"))
+    put(top + r0, 1, rgb(C_DIM, "  0"))
+    put(top + h - 1, 1, rgb(C_DIM, "-12"))
+    put(top + r0, bx, rgb(C_DISC_B, "╌" * (10 * bw - (bw - barw))))
+
+    # band sliders (half-block vertical bars)
+    for i in range(10):
+        g = eq.gains[i]
+        gsub = half + int(round(g / 12.0 * half))
+        losub, hisub = (half, gsub) if g >= 0 else (gsub, half)
+        x = bx + i * bw
+        if not on:
+            c_fill = C_DIM
+        elif i == eq.sel:
+            c_fill = C_ICE
+        else:
+            c_fill = C_ACCENT if g >= 0 else C_STEEL
+        if losub == hisub:  # flat band: thumb on the zero line so it's visible
+            put(top + r0, x, rgb(c_fill, f"{'●':^{barw}}"))
+        for r in range(h):
+            hi = S - 2 * r
+            lo = hi - 1
+            f_hi = losub < hi <= hisub
+            f_lo = losub < lo <= hisub
+            if f_hi and f_lo:
+                cell = rgb(c_fill, "█" * barw)
+            elif f_hi:
+                cell = rgb(c_fill, "▀" * barw)
+            elif f_lo:
+                cell = rgb(c_fill, "▄" * barw)
+            else:
+                continue  # keep zero line / blank
+            put(top + r, x, cell)
+        lbl = EQ_FREQS[i]
+        put(top + h, x, rgb(C_ICE if i == eq.sel else C_DIM, f"{lbl:^{barw}}"[:bw]))
+
+    put(rows, 2, rgb(C_DIM,
+        "drag bars · scroll=fine · ‹›/p preset · f flat · t on/off · e back"[:cols - 2]))
     sys.stdout.write("".join(out))
     sys.stdout.flush()
 
@@ -219,7 +420,9 @@ def draw(st, angle):
 def handle_click(mx, my, st):
     g = GEOM
     if not g:
-        return
+        return None
+    if my == g.get("hint_row") and g["ix"] <= mx <= g["ix"] + 6:
+        return "eq"
     if my == g["prog_row"] and mx >= g["ix"] and st.selected and st.length > 0:
         frac = min(1.0, max(0.0, (mx - g["ix"]) / g["prog_w"]))
         run(["playerctl", "-p", st.selected, "position", str(int(st.length * frac))])
@@ -228,13 +431,63 @@ def handle_click(mx, my, st):
         run(["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", f"{frac:.2f}"])
     elif st.selected and math.hypot((mx - 1) - g["cx"], 2 * (my - 1) - g["cy"]) <= g["R"] + 1:
         run(["playerctl", "-p", st.selected, "play-pause"])
+    return None
+
+
+def eq_band_at(mx):
+    g = GEOM
+    i = (mx - g["eq_bx"]) // g["eq_bw"]
+    return int(i) if 0 <= i < 10 else None
+
+
+def handle_eq_mouse(b, mx, my, kind, eq):
+    g = GEOM
+    if not g or "eq_top" not in g:
+        return None
+    in_bands = g["eq_top"] <= my <= g["eq_top"] + g["eq_h"]  # sliders + freq labels
+    if b in (64, 65):  # scroll = fine adjust
+        d = 0.5 if b == 64 else -0.5
+        if my == g["eq_pre_row"]:
+            eq.set_preamp(eq.preamp + d)
+        elif in_bands:
+            i = eq_band_at(mx)
+            if i is not None:
+                eq.sel = i
+                eq.set_band(i, eq.gains[i] + d)
+        return None
+    if kind != "M" or b not in (0, 32):
+        return None
+    if b == 0 and my == g["eq_hdr_row"]:
+        if g["eq_on_x"] <= mx < g["eq_on_x"] + 6:
+            eq.toggle()
+        elif abs(mx - g["eq_prev_x"]) <= 1:
+            eq.cycle_preset(-1)
+        elif abs(mx - g["eq_next_x"]) <= 1:
+            eq.cycle_preset(1)
+        elif mx >= g["eq_close_x"] - 1:
+            return "back"
+        return None
+    if my == g["eq_pre_row"] and mx >= g["eq_pre_x"]:
+        frac = min(1.0, max(0.0, (mx - g["eq_pre_x"]) / g["eq_pre_w"]))
+        eq.set_preamp(-12 + 24 * frac)
+    elif in_bands:
+        i = eq_band_at(mx)
+        if i is not None:
+            eq.sel = i
+            if my < g["eq_top"] + g["eq_h"]:  # freq-label row only selects
+                frac = (my - g["eq_top"] + 0.5) / g["eq_h"]
+                eq.set_band(i, 12 - 24 * frac)
+    return None
 
 
 def main():
     st = State()
     st.poll()
+    eq = EQ()
+    eq.apply()
     angle = 0.0
     last_poll = 0.0
+    mode = "player"
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     tty.setcbreak(fd)
@@ -245,10 +498,15 @@ def main():
             now = time.monotonic()
             if now - last_poll >= POLL_EVERY:
                 st.poll()
+                if not eq.synced:  # pipewire not up yet at login, or restarted
+                    eq.apply()
                 last_poll = now
             if st.status == "Playing":
                 angle = (angle + 0.14) % (2 * math.pi)
-            draw(st, angle)
+            if mode == "eq":
+                draw_eq(eq)
+            else:
+                draw(st, angle, eq)
 
             r, _, _ = select.select([fd], [], [], FRAME)
             if not r:
@@ -256,22 +514,58 @@ def main():
             data = os.read(fd, 128).decode(errors="ignore")
             for ev in MOUSE_RE.finditer(data):
                 b, mx, my, kind = int(ev[1]), int(ev[2]), int(ev[3]), ev[4]
-                if b == 64:
+                if mode == "eq":
+                    if handle_eq_mouse(b, mx, my, kind, eq) == "back":
+                        mode = "player"
+                        sys.stdout.write("\x1b[2J")
+                elif b == 64:
                     run(["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "3%+"])
                 elif b == 65:
                     run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "3%-"])
                 elif b == 0 and kind == "M":
-                    handle_click(mx, my, st)
+                    if handle_click(mx, my, st) == "eq":
+                        mode = "eq"
+                        sys.stdout.write("\x1b[2J")
             k = MOUSE_RE.sub("", data)
-            p = ["-p", st.selected] if st.selected else []
             if k in ("q", "\x03"):
                 break
-            elif k == " " and st.selected:
+            if mode == "eq":
+                if k in ("e", "\x1b"):
+                    mode = "player"
+                    sys.stdout.write("\x1b[2J")
+                elif k == "\x1b[C":
+                    eq.sel = (eq.sel + 1) % 10
+                elif k == "\x1b[D":
+                    eq.sel = (eq.sel - 1) % 10
+                elif k == "\x1b[A":
+                    eq.set_band(eq.sel, eq.gains[eq.sel] + 1)
+                elif k == "\x1b[B":
+                    eq.set_band(eq.sel, eq.gains[eq.sel] - 1)
+                elif k == "0":
+                    eq.set_band(eq.sel, 0.0)
+                elif k == "f":
+                    eq.set_preset(0)
+                elif k == "p":
+                    eq.cycle_preset(1)
+                elif k == "P":
+                    eq.cycle_preset(-1)
+                elif k == "t":
+                    eq.toggle()
+                elif k in ("+", "="):
+                    eq.set_preamp(eq.preamp + 1)
+                elif k == "-":
+                    eq.set_preamp(eq.preamp - 1)
+                continue
+            p = ["-p", st.selected] if st.selected else []
+            if k == " " and st.selected:
                 run(["playerctl", *p, "play-pause"])
             elif k == "n" and st.selected:
                 run(["playerctl", *p, "next"])
             elif k == "b" and st.selected:
                 run(["playerctl", *p, "previous"])
+            elif k == "e":
+                mode = "eq"
+                sys.stdout.write("\x1b[2J")
             elif k == "\x1b[C" and st.selected:
                 run(["playerctl", *p, "position", "5+"])
             elif k == "\x1b[D" and st.selected:

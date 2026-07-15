@@ -12,6 +12,20 @@ say "Installing scripts to ~/.local/bin"
 mkdir -p ~/.local/bin
 install -m 755 bin/vinylctl bin/starwars-scene bin/panel-fastfetch.sh ~/.local/bin/
 
+say "Installing PipeWire equalizer sink (vinylctl EQ)"
+mkdir -p ~/.config/pipewire/pipewire.conf.d
+cp config/pipewire/pipewire.conf.d/vinylctl-eq.conf ~/.config/pipewire/pipewire.conf.d/
+systemctl --user restart pipewire wireplumber 2>/dev/null || true
+sleep 2
+eqid=$(pw-dump 2>/dev/null | python3 -c 'import json,sys
+print(next((o["id"] for o in json.load(sys.stdin)
+  if ((o.get("info") or {}).get("props") or {}).get("node.name")=="vinylctl_eq"), ""))' || true)
+if [ -n "$eqid" ]; then
+    wpctl set-default "$eqid" && say "vinylctl_eq set as default sink (audio now routes through the EQ)"
+else
+    say "note: vinylctl_eq sink not found yet — set it as default sink after next login (wpctl set-default <id>)"
+fi
+
 say "Installing kitty panel configs"
 mkdir -p ~/.config/kitty/panels
 cp config/kitty/panels/*.conf ~/.config/kitty/panels/
