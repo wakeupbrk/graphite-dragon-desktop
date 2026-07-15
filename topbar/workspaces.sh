@@ -62,7 +62,10 @@ print_workspaces() {
     local pos
     pos=$(echo "$raw" | awk -F'"' -v cur="$current" \
         '{ c=0; for (i=2;i<=NF;i+=2) { c++; if (c%2==1 && $i==cur) { print (c+1)/2; exit } } }')
-    [ -n "$pos" ] && "$(dirname "${BASH_SOURCE[0]}")/qs_palette.sh" "$pos"
+    if [ -n "$pos" ]; then
+        "$(dirname "${BASH_SOURCE[0]}")/qs_palette.sh" "$pos"
+        "$(dirname "${BASH_SOURCE[0]}")/qs_wallpaper.sh" "$pos"
+    fi
 }
 
 print_workspaces

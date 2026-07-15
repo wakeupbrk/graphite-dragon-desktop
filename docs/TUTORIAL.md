@@ -143,6 +143,8 @@ run a KWin script that reads `window.iconGeometry` — `0,0 0x0` means your dock
 - `kb_fetch.sh` — keyboard layout from `org.kde.keyboard`
 - `qs_palette.sh <1-4>` — writes `/tmp/qs_colors.json` (the bar polls it every 1 s); per-desktop palettes: 1 ice / 2 mint / 3 violet / 4 amber
 - `topbar-launch.sh` + `qs-topbar.service` — autostart via systemd user unit
+- `qs_wallpaper.sh <1-4>` — per-desktop wallpapers (hue-shifted variants of graphite-steel: mint/violet/amber); Plasma has no per-virtual-desktop wallpaper, so the switch daemon swaps it as you move
+- App routing: `kwin/kwinrulesrc` ends with a rule sending media apps (`spotify|spotube|noutube`, regex wmclass) to the Fun desktop. **Desktop UUIDs are machine-specific** — after creating your 4 desktops, replace the `desktops=` value with your Fun desktop's UUID from `busctl --user get-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager desktops`
 
 Gotchas we hit:
 - The bar's `exclusiveZone` must be `barHeight + margins`, or windows tuck under the floating bar (patched).

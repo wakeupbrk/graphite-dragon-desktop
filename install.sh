@@ -62,7 +62,7 @@ kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled false
 
 say "Installing wallpaper"
 mkdir -p ~/.local/share/wallpapers
-cp wallpaper/graphite-steel.png ~/.local/share/wallpapers/
+cp wallpaper/graphite-steel*.png ~/.local/share/wallpapers/
 
 if [ ! -e ~/.config/kwinrulesrc ]; then
     say "Installing KWin window rules (panel geometry)"
@@ -89,7 +89,7 @@ if command -v quickshell >/dev/null; then
     git apply --directory="$HOME/.config/hypr/scripts" --unsafe-paths topbar/kwin-port.patch
     install -m 755 topbar/workspaces.sh ~/.config/hypr/scripts/workspaces.sh
     install -m 755 topbar/kb_fetch.sh ~/.config/hypr/scripts/quickshell/watchers/kb_fetch.sh
-    install -m 755 topbar/qs_palette.sh topbar/topbar-launch.sh ~/.config/hypr/scripts/
+    install -m 755 topbar/qs_palette.sh topbar/qs_wallpaper.sh topbar/topbar-launch.sh ~/.config/hypr/scripts/
     [ -e ~/.config/hypr/settings.json ] || cp topbar/settings.json ~/.config/hypr/settings.json
     # fonts the bar needs (icons come from the nerd font)
     mkdir -p ~/.local/share/fonts
