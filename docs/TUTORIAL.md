@@ -52,7 +52,7 @@ sudo dnf install mpd mpc yt-dlp
 - **Icons**: [WhiteSur-dark](https://github.com/vinceliuice/WhiteSur-icon-theme) (macOS Big Sur style), user-level install, then apply in System Settings.
 - **Top bar** (macOS-ish): a 30 px top panel with Kickoff, global appmenu, spacer, systray, clock. For the translucent tint install the *Panel Colorizer* widget: custom background `#14161a` at 0.45 opacity + blur. Panel text color comes from the Plasma style (a dark style with light text, e.g. "Nothing") — Panel Colorizer's foreground override cannot recolor tray icons.
 - **Terminal palette**: `config/kitty/panels/graphite-theme.conf` — steel/ice colors, `background_opacity 0` so panels float directly on the wallpaper. All six panel configs include it.
-- **btop**: theme `graphite` (included). **cava**: 5-step steel gradient (included).
+- **btop**: theme `graphite` (included). **cava**: chunky 4-wide bars, Monstercat smoothing, 8-step gradient from deep steel to bright ice tips (included).
 
 ## 3. The panels
 

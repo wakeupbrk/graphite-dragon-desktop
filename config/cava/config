@@ -22,9 +22,9 @@
 
 # The number of bars (0-512). 0 sets it to auto (fill up console).
 # Bars' width and space between bars in number of characters.
-; bars = 0
-; bar_width = 2
-; bar_spacing = 1
+bars = 0
+bar_width = 4
+bar_spacing = 2
 # bar_height is only used for output in "noritake" format
 ; bar_height = 32
 
@@ -212,12 +212,15 @@
 
 [color]
 gradient = 1
-gradient_count = 5
-gradient_color_1 = '#2f4d66'
-gradient_color_2 = '#3e6480'
-gradient_color_3 = '#4f7d9b'
-gradient_color_4 = '#6496b5'
-gradient_color_5 = '#7fb2d0'
+gradient_count = 8
+gradient_color_1 = '#2c3a4a'
+gradient_color_2 = '#3a5468'
+gradient_color_3 = '#4a6d85'
+gradient_color_4 = '#5f8ca8'
+gradient_color_5 = '#7fabc7'
+gradient_color_6 = '#93c4dd'
+gradient_color_7 = '#b0d9ec'
+gradient_color_8 = '#e6f4fc'
 
 
 # Colors can be one of seven predefined: black, blue, cyan, green, magenta, red, white, yellow.
@@ -256,7 +259,7 @@ gradient_color_5 = '#7fb2d0'
 ; integral = 77
 
 # Disables or enables the so-called "Monstercat smoothing" with or without "waves". Set to 0 to disable.
-; monstercat = 0
+monstercat = 1
 ; waves = 0
 
 # Set gravity percentage for "drop off". Higher values means bars will drop faster.
