@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Star Wars Panel
+Exec=kitty --class starwars-panel --config __HOME__/.config/kitty/panels/starwars.conf __HOME__/.local/bin/starwars-scene
+X-KDE-autostart-after=panel
+NoDisplay=true

@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Claude (for Amar)"
+            }
+        ],
+        "Category": "Appearance",
+        "Description": "Minimize animation that dives windows toward the krema dock at bottom-center. Works without taskbar icon geometry, which krema does not publish.",
+        "EnabledByDefault": true,
+        "Id": "kwin4_effect_kremadive",
+        "License": "MIT",
+        "Name": "Krema Dive"
+    },
+    "KPackageStructure": "KWin/Effect",
+    "X-KDE-Ordering": 60,
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

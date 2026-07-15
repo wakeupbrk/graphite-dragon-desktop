@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""starwars-scene — endless ASCII space battle for the desktop panel.
+
+X-wings vs TIE fighters over a drifting starfield, graphite-steel palette.
+Display-only (the panel window is non-focusable).
+"""
+import math
+import random
+import shutil
+import sys
+import time
+
+C_STAR_DIM = (44, 54, 68)
+C_STAR = (70, 83, 98)
+C_XWING = (127, 171, 199)
+C_TIE = (109, 130, 150)
+C_XSHOT = (168, 220, 238)
+C_TSHOT = (95, 140, 168)
+C_BOOM = [(240, 246, 251), (207, 224, 239), (127, 171, 199), (70, 83, 98)]
+
+XWING = ">=o=>"
+TIE = "|-O-|"
+BOOM_CH = "✺✹**··"
+FPS = 12
+
+
+class Ship:
+    def __init__(self, side, w, h):
+        self.side = side
+        self.respawn(w, h)
+
+    def respawn(self, w, h):
+        self.by = random.uniform(1.5, max(2.0, h - 2.5))
+        self.phase = random.uniform(0, 2 * math.pi)
+        self.bob = random.uniform(0.6, 1.8)
+        self.speed = random.uniform(0.5, 1.1)
+        if self.side == "x":
+            self.x = random.uniform(1, max(2.0, w * 0.22))
+        else:
+            self.x = random.uniform(w * 0.55, max(w * 0.55 + 1, w - 7))
+        self.dead = 0
+        self.cool = random.randint(8, 40)
+
+    def pos(self, t, h):
+        y = self.by + math.sin(t * self.speed + self.phase) * self.bob
+        return self.x + math.sin(t * 0.4 + self.phase) * 2.0, min(max(y, 0), h - 1)
+
+
+def render(grid):
+    out = ["\x1b[H"]
+    last = None
+    for r, row in enumerate(grid):
+        out.append(f"\x1b[{r + 1};1H")
+        for ch, color in row:
+            if color != last:
+                if color is None:
+                    out.append("\x1b[0m")
+                else:
+                    out.append(f"\x1b[38;2;{color[0]};{color[1]};{color[2]}m")
+                last = color
+            out.append(ch)
+    out.append("\x1b[0m")
+    sys.stdout.write("".join(out))
+    sys.stdout.flush()
+
+
+def put(grid, x, y, text, color):
+    y = int(y)
+    if not (0 <= y < len(grid)):
+        return
+    for i, ch in enumerate(text):
+        xi = int(x) + i
+        if 0 <= xi < len(grid[y]):
+            grid[y][xi] = (ch, color)
+
+
+def main():
+    sys.stdout.write("\x1b[?1049h\x1b[?25l\x1b[2J")
+    try:
+        w, h = shutil.get_terminal_size()
+        stars = [[random.uniform(0, w), random.randint(0, h - 1),
+                  random.uniform(0.04, 0.35), random.choice("··.·✦."),
+                  random.choice([C_STAR_DIM, C_STAR_DIM, C_STAR])]
+                 for _ in range(max(12, w * h // 26))]
+        xwings = [Ship("x", w, h) for _ in range(3)]
+        ties = [Ship("t", w, h) for _ in range(4)]
+        shots = []  # [x, y, dx, color]
+        t = 0.0
+        while True:
+            w, h = shutil.get_terminal_size()
+            grid = [[(" ", None)] * w for _ in range(h)]
+            t += 1.0 / FPS
+
+            for s in stars:
+                s[0] -= s[2]
+                if s[0] < 0:
+                    s[0], s[1] = w - 1, random.randint(0, h - 1)
+                put(grid, s[0], s[1], s[3], s[4])
+
+            for fleet, foe, art, color, shot_c, dx in (
+                (xwings, ties, XWING, C_XWING, C_XSHOT, 2.2),
+                (ties, xwings, TIE, C_TIE, C_TSHOT, -2.2),
+            ):
+                for ship in fleet:
+                    if ship.dead:
+                        i = len(BOOM_CH) - ship.dead
+                        put(grid, ship.x + 1, ship.by,
+                            BOOM_CH[max(0, i)], C_BOOM[min(i // 2, 3)])
+                        ship.dead -= 1
+                        if ship.dead == 0:
+                            ship.respawn(w, h)
+                        continue
+                    x, y = ship.pos(t, h)
+                    put(grid, x, y, art, color)
+                    ship.cool -= 1
+                    if ship.cool <= 0:
+                        nose = x + len(art) if dx > 0 else x - 1
+                        shots.append([nose, round(y), dx, shot_c])
+                        ship.cool = random.randint(18, 70)
+
+            alive = []
+            for sh in shots:
+                sh[0] += sh[2]
+                if not (0 <= sh[0] < w):
+                    continue
+                hit = False
+                foes = ties if sh[2] > 0 else xwings
+                for ship in foes:
+                    if ship.dead:
+                        continue
+                    sx, sy = ship.pos(t, h)
+                    if abs(sh[1] - sy) < 1 and sx - 1 <= sh[0] <= sx + 5:
+                        ship.dead = len(BOOM_CH)
+                        hit = True
+                        break
+                if not hit:
+                    put(grid, sh[0], sh[1], "─" if abs(sh[2]) < 2.5 else "━", sh[3])
+                    alive.append(sh)
+            shots = alive
+
+            render(grid)
+            time.sleep(1.0 / FPS)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sys.stdout.write("\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    main()

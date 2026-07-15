@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""vinylctl — spinning-vinyl MPRIS controller for the desktop media panel.
+
+Controls whatever is playing (browser, mpv, ...) via playerctl, and the
+system volume via wpctl. Styled for the graphite-steel desktop theme.
+
+Keys: space play/pause | n/b next/prev | ←/→ seek 5s | ↑/↓ volume | m mute
+      tab cycle player | q quit
+"""
+import math
+import os
+import re
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import termios
+import time
+import tty
+
+# graphite-steel palette
+C_TEXT = (219, 230, 242)   # #dbe6f2
+C_DIM = (109, 130, 150)    # #6d8296
+C_STEEL = (95, 140, 168)   # #5f8ca8
+C_ACCENT = (127, 171, 199) # #7fabc7
+C_ICE = (168, 220, 238)    # #a8dcee
+C_DISC_A = (32, 37, 44)
+C_DISC_B = (38, 45, 54)
+C_RIM = (70, 83, 98)
+C_HOLE = (14, 16, 19)
+
+FS = "\x1f"
+POLL_EVERY = 0.5
+FRAME = 0.1
+MOUSE_RE = re.compile(r"\x1b\[<(\d+);(\d+);(\d+)([Mm])")
+GEOM = {}
+
+
+def run(cmd, timeout=1.0):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+class State:
+    players = []
+    selected = None
+    status = "Idle"
+    title = artist = album = player_name = ""
+    position = length = 0.0
+    poll_time = 0.0
+    volume = 0.0
+    muted = False
+
+    def poll(self):
+        out = run(["playerctl", "-l"])
+        self.players = [p for p in (out or "").splitlines() if p]
+        if self.selected not in self.players:
+            self.selected = None
+        if self.selected is None or self._status(self.selected) != "Playing":
+            for p in self.players:
+                if self._status(p) == "Playing":
+                    self.selected = p
+                    break
+        if self.selected is None and self.players:
+            self.selected = self.players[0]
+
+        if self.selected:
+            fmt = FS.join(["{{status}}", "{{position}}", "{{mpris:length}}",
+                           "{{title}}", "{{artist}}", "{{album}}", "{{playerName}}"])
+            out = run(["playerctl", "-p", self.selected, "metadata", "--format", fmt])
+            if out:
+                f = (out.split(FS) + [""] * 7)[:7]
+                self.status = f[0] or "Stopped"
+                self.position = float(f[1] or 0) / 1e6
+                self.length = float(f[2] or 0) / 1e6
+                self.title, self.artist, self.album, self.player_name = f[3], f[4], f[5], f[6]
+            else:
+                self.status = "Idle"
+        else:
+            self.status = "Idle"
+            self.title = self.artist = self.album = self.player_name = ""
+            self.position = self.length = 0.0
+        self.poll_time = time.monotonic()
+
+        out = run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"])
+        if out and out.startswith("Volume:"):
+            parts = out.split()
+            self.volume = float(parts[1])
+            self.muted = "[MUTED]" in out
+
+    def _status(self, player):
+        return run(["playerctl", "-p", player, "status"]) or ""
+
+    def now_position(self):
+        if self.status == "Playing":
+            return self.position + (time.monotonic() - self.poll_time)
+        return self.position
+
+
+def rgb(fg, text, bg=None):
+    s = f"\x1b[38;2;{fg[0]};{fg[1]};{fg[2]}m"
+    if bg:
+        s += f"\x1b[48;2;{bg[0]};{bg[1]};{bg[2]}m"
+    return s + text + "\x1b[0m"
+
+
+def mix(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def vinyl_px(x, y, R, angle, playing):
+    """Color of one 'pixel' of the vinyl at offset x,y from center, or None."""
+    r = math.hypot(x, y)
+    if r > R:
+        return None
+    if r > R - 1.2:
+        return C_RIM
+    if r < R * 0.06:
+        return C_HOLE
+    if r < R * 0.30:  # label
+        a = (math.atan2(y, x) - angle) % (2 * math.pi)
+        base = C_STEEL if r > R * 0.08 else C_ACCENT
+        # rotating notch on the label so spin is visible
+        if r > R * 0.17 and abs(((a + math.pi / 2) % (2 * math.pi)) - math.pi) > math.pi - 0.35:
+            return C_ICE
+        return base
+    # grooves
+    band = C_DISC_A if int(r * 1.6) % 2 else C_DISC_B
+    # two opposite specular gloss wedges, rotating
+    a = (math.atan2(y, x) - angle) % math.pi
+    d = min(a, math.pi - a)
+    if d < 0.30:
+        band = mix(band, C_RIM, (0.30 - d) / 0.30 * (0.9 if playing else 0.5))
+    return band
+
+
+def bar(frac, width, fill_c, track_c, thumb=True):
+    frac = max(0.0, min(1.0, frac))
+    n = int(frac * width)
+    s = rgb(fill_c, "━" * n)
+    if thumb and width > n:
+        s += rgb(C_ICE, "●") + rgb(track_c, "─" * (width - n - 1))
+    else:
+        s += rgb(track_c, "─" * (width - n))
+    return s
+
+
+def fmt_time(s):
+    s = max(0, int(s))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def draw(st, angle):
+    cols, rows = shutil.get_terminal_size()
+    H = rows * 2
+    R = min(H // 2 - 2, int(cols * 0.42) // 2)
+    cx = R + 2
+    cy = H // 2
+    playing = st.status == "Playing"
+
+    out = ["\x1b[H"]
+    for row in range(rows):
+        line = []
+        for col in range(2 * (R + 2)):
+            top = vinyl_px(col - cx, 2 * row - cy, R, angle, playing)
+            bot = vinyl_px(col - cx, 2 * row + 1 - cy, R, angle, playing)
+            if top is None and bot is None:
+                line.append(" ")
+            elif bot is None:
+                line.append(rgb(top, "▀"))
+            elif top is None:
+                line.append(rgb(bot, "▄"))
+            else:
+                line.append(rgb(top, "▀", bg=bot))
+        out.append("".join(line) + "\x1b[K\n")
+    out.append("\x1b[J")
+
+    # info column, overlaid to the right of the disc
+    ix = 2 * (R + 2) + 3
+    iw = max(10, cols - ix - 1)
+    ln = max(1, rows // 2 - 5)
+    GEOM.update(cx=cx, cy=cy, R=R, ix=ix, prog_row=ln + 6, prog_w=max(4, iw - 14),
+                vol_row=ln + 8, vol_x=ix + 4, vol_w=max(4, iw - 10))
+
+    def put(row, s):
+        out.append(f"\x1b[{row};{ix}H\x1b[K" + s)
+
+    icon = {"Playing": "▶", "Paused": "⏸", "Stopped": "⏹"}.get(st.status, "○")
+    put(ln, rgb(C_ICE, f"{icon} {st.status.upper()}") +
+        (rgb(C_DIM, f"  ·  {st.player_name or st.selected}") if st.selected else ""))
+    title = st.title or ("nothing playing" if st.status == "Idle" else st.selected or "")
+    put(ln + 2, rgb(C_TEXT, ("♪ " + title)[:iw]) if st.title else rgb(C_DIM, title[:iw]))
+    put(ln + 3, rgb(C_STEEL, (st.artist or "")[:iw]))
+    put(ln + 4, rgb(C_DIM, (st.album or "")[:iw]))
+
+    if st.length > 0:
+        pos = min(st.now_position(), st.length)
+        put(ln + 6, bar(pos / st.length, max(4, iw - 14), C_ACCENT, C_DISC_B) +
+            rgb(C_DIM, f" {fmt_time(pos)}/{fmt_time(st.length)}"))
+    elif st.selected:
+        put(ln + 6, rgb(C_DIM, f"  {fmt_time(st.now_position())}"))
+    else:
+        put(ln + 6, "")
+
+    vol_label = "MUTE" if st.muted else f"{int(st.volume * 100):3d}%"
+    put(ln + 8, rgb(C_DIM, "vol ") +
+        bar(st.volume, max(4, iw - 10), C_STEEL if not st.muted else C_DISC_B, C_DISC_B) +
+        rgb(C_ICE if not st.muted else C_DIM, " " + vol_label))
+
+    put(rows - 1, rgb(C_DIM, "click disc=pause · bars=seek/vol · scroll=vol"[:cols - ix]))
+    sys.stdout.write("".join(out))
+    sys.stdout.flush()
+
+
+def handle_click(mx, my, st):
+    g = GEOM
+    if not g:
+        return
+    if my == g["prog_row"] and mx >= g["ix"] and st.selected and st.length > 0:
+        frac = min(1.0, max(0.0, (mx - g["ix"]) / g["prog_w"]))
+        run(["playerctl", "-p", st.selected, "position", str(int(st.length * frac))])
+    elif my == g["vol_row"] and mx >= g["vol_x"] - 4:
+        frac = min(1.0, max(0.0, (mx - g["vol_x"]) / g["vol_w"]))
+        run(["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", f"{frac:.2f}"])
+    elif st.selected and math.hypot((mx - 1) - g["cx"], 2 * (my - 1) - g["cy"]) <= g["R"] + 1:
+        run(["playerctl", "-p", st.selected, "play-pause"])
+
+
+def main():
+    st = State()
+    st.poll()
+    angle = 0.0
+    last_poll = 0.0
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
+    sys.stdout.write("\x1b[?1049h\x1b[?25l\x1b[2J\x1b[?1002;1006h")
+    signal.signal(signal.SIGWINCH, lambda *a: None)
+    try:
+        while True:
+            now = time.monotonic()
+            if now - last_poll >= POLL_EVERY:
+                st.poll()
+                last_poll = now
+            if st.status == "Playing":
+                angle = (angle + 0.14) % (2 * math.pi)
+            draw(st, angle)
+
+            r, _, _ = select.select([fd], [], [], FRAME)
+            if not r:
+                continue
+            data = os.read(fd, 128).decode(errors="ignore")
+            for ev in MOUSE_RE.finditer(data):
+                b, mx, my, kind = int(ev[1]), int(ev[2]), int(ev[3]), ev[4]
+                if b == 64:
+                    run(["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "3%+"])
+                elif b == 65:
+                    run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "3%-"])
+                elif b == 0 and kind == "M":
+                    handle_click(mx, my, st)
+            k = MOUSE_RE.sub("", data)
+            p = ["-p", st.selected] if st.selected else []
+            if k in ("q", "\x03"):
+                break
+            elif k == " " and st.selected:
+                run(["playerctl", *p, "play-pause"])
+            elif k == "n" and st.selected:
+                run(["playerctl", *p, "next"])
+            elif k == "b" and st.selected:
+                run(["playerctl", *p, "previous"])
+            elif k == "\x1b[C" and st.selected:
+                run(["playerctl", *p, "position", "5+"])
+            elif k == "\x1b[D" and st.selected:
+                run(["playerctl", *p, "position", "5-"])
+            elif k == "\x1b[A":
+                run(["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"])
+            elif k == "\x1b[B":
+                run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"])
+            elif k == "m":
+                run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
+            elif k == "\t" and st.players:
+                i = st.players.index(st.selected) if st.selected in st.players else -1
+                st.selected = st.players[(i + 1) % len(st.players)]
+            last_poll = 0.0  # refresh right after any command
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write("\x1b[?1002;1006l\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    main()

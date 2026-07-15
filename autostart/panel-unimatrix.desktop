@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Unimatrix Panel
+Exec=kitty --class unimatrix-panel --config __HOME__/.config/kitty/panels/unimatrix.conf unimatrix
+X-KDE-autostart-after=panel
+NoDisplay=true

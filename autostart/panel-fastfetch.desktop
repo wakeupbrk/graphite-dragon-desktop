@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Fastfetch Panel
+Exec=kitty --class fastfetch-panel --config __HOME__/.config/kitty/panels/fastfetch.conf __HOME__/.local/bin/panel-fastfetch.sh
+X-KDE-autostart-after=panel
+NoDisplay=true

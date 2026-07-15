@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Cava Panel
+Exec=kitty --class cava-panel --config __HOME__/.config/kitty/panels/cava.conf cava
+X-KDE-autostart-after=panel
+NoDisplay=true
+

@@ -1,0 +1,16 @@
+[General]
+BackgroundOpacity=0.5
+BackgroundStyle=2
+CornerRadius=14
+Edge=1
+Floating=true
+HideDelay=600
+IconSize=34
+IconSpacing=16
+MaxZoomFactor=1.6
+PinnedLaunchers=preferred://filemanager,applications:org.kde.konsole.desktop,applications:org.mozilla.firefox.desktop,applications:systemsettings.desktop
+ShadowEnabled=true
+ShowDelay=100
+TintColor=#14161a
+UseSystemColor=false
+VisibilityMode=1

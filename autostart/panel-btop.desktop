@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Btop Panel
+Exec=kitty --class btop-panel --config __HOME__/.config/kitty/panels/btop.conf btop
+X-KDE-autostart-after=panel
+NoDisplay=true

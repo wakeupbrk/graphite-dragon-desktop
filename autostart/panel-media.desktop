@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Media Panel
+Exec=kitty --class media-panel --config __HOME__/.config/kitty/panels/media.conf __HOME__/.local/bin/vinylctl
+X-KDE-autostart-after=panel
+NoDisplay=true
